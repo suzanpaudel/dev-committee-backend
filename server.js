@@ -1,4 +1,6 @@
 const express = require('express');
+const morgan = require('morgan');
+const bodyParser = require('body-parser');
 require('dotenv').config();
 const connectDB = require('./config/connectDB');
 
@@ -9,6 +11,16 @@ const profileRoutes = require('./routes/profile');
 const postRoutes = require('./routes/posts');
 
 const app = express();
+
+//middlewares
+app.use(morgan('dev'));
+
+app.use(express.json());
+app.use(
+  express.urlencoded({
+    extended: true,
+  })
+);
 
 //connected to database
 connectDB();
