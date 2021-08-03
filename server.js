@@ -1,7 +1,9 @@
 const express = require('express');
 const morgan = require('morgan');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 require('dotenv').config();
+
 const connectDB = require('./config/connectDB');
 
 //import routes
@@ -13,6 +15,7 @@ const postRoutes = require('./routes/posts');
 const app = express();
 
 //middlewares
+app.use(cors());
 app.use(morgan('dev'));
 
 app.use(express.json());

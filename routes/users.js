@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const gravatar = require('gravatar');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -18,6 +19,7 @@ router.post(
     body('password', 'Password must be at least six character long').isLength({
       min: 6,
     }),
+    body('recaptchaToken', 'reCaptchaToken is missing').not().isEmpty(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -25,47 +27,57 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password } = req.body;
+    const { name, email, password, recaptchaToken } = req.body;
 
     try {
-      //checks if the user already exists
-      const user = await User.findOne({ email });
+      const googleVerifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET}&response=${recaptchaToken}`;
 
-      if (user) {
-        return res
-          .status(400)
-          .json({ errors: [{ msg: 'User already exists' }] });
-      }
+      const response = await axios.post(googleVerifyUrl);
 
-      //get user's gravatar
-      const avatar = gravatar.url(email, {
-        s: '200',
-        r: 'pg',
-        d: 'mm',
-      });
+      if (response.data.success) {
+        //checks if the user already exists
+        const user = await User.findOne({ email });
 
-      const newUser = new User({ name, email, avatar, password });
-
-      //encrypt password
-      const salt = await bcrypt.genSalt(10);
-
-      newUser.password = await bcrypt.hash(password, salt);
-
-      await newUser.save();
-
-      jwt.sign(
-        { id: newUser.id },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' },
-        (error, token) => {
-          if (error) {
-            throw error;
-          }
-
-          // return jsonwebtoken
-          res.json({ token });
+        if (user) {
+          return res
+            .status(400)
+            .json({ errors: [{ msg: 'User already exists' }] });
         }
-      );
+
+        //get user's gravatar
+        const avatar = gravatar.url(email, {
+          s: '200',
+          r: 'pg',
+          d: 'mm',
+        });
+
+        const newUser = new User({ name, email, avatar, password });
+
+        //encrypt password
+        const salt = await bcrypt.genSalt(10);
+
+        newUser.password = await bcrypt.hash(password, salt);
+
+        await newUser.save();
+
+        jwt.sign(
+          { id: newUser.id },
+          process.env.JWT_SECRET,
+          { expiresIn: '7d' },
+          (error, token) => {
+            if (error) {
+              throw error;
+            }
+
+            // return jsonwebtoken
+            res.json({ token });
+          }
+        );
+      } else {
+        return res.status(400).json({
+          msg: 'Invalid Captcha. Try Again',
+        });
+      }
     } catch (error) {
       console.error(error.message);
       res.status(500).send('Server error');
